@@ -29,7 +29,7 @@ WEATHER_SCHEDULE_TIME = os.getenv("WEATHER_SCHEDULE_TIME", "08:00")
 
 # === 네이버 뉴스 설정 ===
 # 키워드: 쉼표로 구분 (환경변수로 변경 가능)
-_default_keywords = "AI,주식,반도체,긴급속보"
+_default_keywords = "인공지능,주식,반도체,긴급속보"
 NEWS_KEYWORDS = [
     k.strip() for k in os.getenv("NEWS_KEYWORDS", _default_keywords).split(",") if k.strip()
 ]
