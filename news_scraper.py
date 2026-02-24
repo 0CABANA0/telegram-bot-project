@@ -7,7 +7,9 @@ MD5 해시 기반 중복 필터링 포함.
 
 import hashlib
 import json
+import random
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -82,12 +84,24 @@ def scrape_naver_news(keyword: str, count: int = 5) -> list[dict]:
     url = "https://search.naver.com/search.naver"
     params = {"where": "news", "query": keyword, "sort": "1"}  # sort=1: 최신순
 
-    try:
-        resp = requests.get(url, params=params, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-    except requests.RequestException as e:
-        print(f"[ERROR] '{keyword}' 뉴스 요청 실패: {e}")
+    # 최대 2회 재시도 (403 차단 대응)
+    soup = None
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, params=params, headers=HEADERS, timeout=15)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            break
+        except requests.RequestException as e:
+            if resp is not None and resp.status_code == 403 and attempt < 2:
+                wait = random.uniform(3.0, 6.0)
+                print(f"    [{keyword}] 403 차단 → {wait:.1f}초 대기 후 재시도 ({attempt+1}/2)")
+                time.sleep(wait)
+                continue
+            print(f"[ERROR] '{keyword}' 뉴스 요청 실패: {e}")
+            return []
+
+    if soup is None:
         return []
 
     # 여유분 확보 (필터링으로 감소할 수 있으므로)
@@ -270,6 +284,7 @@ def scrape_all_keywords(keywords: list[str], count_per: int = 5) -> dict[str, li
     """
     여러 키워드를 한 번에 스크래핑합니다.
     중복 기사를 MD5 해시로 필터링합니다.
+    네이버 차단 방지를 위해 요청 간 랜덤 딜레이를 적용합니다.
 
     Returns:
         dict: {키워드: [기사 목록], ...}
@@ -278,7 +293,11 @@ def scrape_all_keywords(keywords: list[str], count_per: int = 5) -> dict[str, li
     all_results = {}
     new_hashes = set()
 
-    for keyword in keywords:
+    for idx, keyword in enumerate(keywords):
+        # 네이버 403 차단 방지: 요청 간 1~3초 랜덤 딜레이
+        if idx > 0:
+            delay = random.uniform(1.0, 3.0)
+            time.sleep(delay)
         raw_articles = scrape_naver_news(keyword, count=count_per + 3)  # 여유분
         filtered = []
 
