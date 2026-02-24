@@ -18,6 +18,14 @@ from config import NEWS_HASH_FILE
 
 HASH_FILE = Path(NEWS_HASH_FILE)
 
+# 조류인플루엔자(AI) 관련 제외 키워드
+_AVIAN_FLU_KEYWORDS = [
+    "조류인플루엔자", "조류독감", "고병원성", "AI 방역", "AI 발생",
+    "AI 확산", "살처분", "가금류", "닭·오리", "AI 의심",
+    "AI 확진", "조류 인플루엔자", "H5N1", "H5N6", "H5N8",
+    "AI 양성", "철새", "AI 역학", "구제역",
+]
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -56,10 +64,17 @@ def _save_sent_hashes(hashes: set):
     )
 
 
+def _is_avian_flu(article: dict) -> bool:
+    """조류인플루엔자 관련 기사인지 판별"""
+    text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+    return any(kw in text for kw in _AVIAN_FLU_KEYWORDS)
+
+
 def scrape_naver_news(keyword: str, count: int = 5) -> list[dict]:
     """
     네이버 뉴스에서 키워드로 뉴스를 검색합니다.
     여러 전략(SDS 신규 디자인 / 레거시)을 시도하여 안정적으로 추출합니다.
+    인공지능/AI 키워드 검색 시 조류인플루엔자 기사를 자동 제외합니다.
 
     Returns:
         list[dict]: [{"title", "link", "press", "summary"}, ...]
@@ -75,18 +90,30 @@ def scrape_naver_news(keyword: str, count: int = 5) -> list[dict]:
         print(f"[ERROR] '{keyword}' 뉴스 요청 실패: {e}")
         return []
 
+    # 여유분 확보 (필터링으로 감소할 수 있으므로)
+    fetch_count = count + 5
+
     # 전략 1: SDS 디자인 시스템 (2025~)
-    articles = _parse_sds(soup, count)
+    articles = _parse_sds(soup, fetch_count)
 
     # 전략 2: 레거시 디자인 (div.news_area)
     if not articles:
-        articles = _parse_legacy(soup, count)
+        articles = _parse_legacy(soup, fetch_count)
 
     # 전략 3: 범용 링크 기반 추출
     if not articles:
-        articles = _parse_generic(soup, count)
+        articles = _parse_generic(soup, fetch_count)
 
-    return articles
+    # 조류인플루엔자 필터: AI/인공지능 관련 키워드일 때 적용
+    ai_keywords = {"ai", "인공지능", "생성ai", "생성형ai", "ai반도체"}
+    if keyword.lower().replace(" ", "") in ai_keywords:
+        filtered = [a for a in articles if not _is_avian_flu(a)]
+        removed = len(articles) - len(filtered)
+        if removed > 0:
+            print(f"    [필터] 조류인플루엔자 기사 {removed}건 제외")
+        articles = filtered
+
+    return articles[:count]
 
 
 def _parse_sds(soup: BeautifulSoup, count: int) -> list[dict]:
