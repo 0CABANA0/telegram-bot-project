@@ -1,0 +1,31 @@
+# 환경변수 (Railway에서는 Environment Variables로 설정)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# 이력 파일
+send_history.json
+
+# IDE
+.vscode/
+.idea/
+
+# 백업
+*.bak
+
+# 로그
+scheduler.log
+
+# Claude
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
