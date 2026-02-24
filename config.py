@@ -17,6 +17,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 CHAT_IDS = {
     "내 개인": os.getenv("PERSONAL_CHAT_ID", "7447207979"),
     "날씨 알림 채널": os.getenv("WEATHER_CHANNEL_ID", "-1003854343800"),
+    "뉴스 채널": os.getenv("NEWS_CHANNEL_ID", ""),
 }
 
 # === 날씨 설정 ===
@@ -24,11 +25,24 @@ WEATHER_CITY = os.getenv("WEATHER_CITY", "Seoul")
 WEATHER_CITY_KR = os.getenv("WEATHER_CITY_KR", "서울")
 
 # === 스케줄 설정 ===
-SCHEDULE_TIME = os.getenv("SCHEDULE_TIME", "08:00")
+WEATHER_SCHEDULE_TIME = os.getenv("WEATHER_SCHEDULE_TIME", "08:00")
 
 # === 네이버 뉴스 설정 ===
-NEWS_KEYWORDS = ["날씨"]
-NEWS_COUNT = 5
+# 키워드: 쉼표로 구분 (환경변수로 변경 가능)
+_default_keywords = "AI,주식,반도체,긴급속보"
+NEWS_KEYWORDS = [
+    k.strip() for k in os.getenv("NEWS_KEYWORDS", _default_keywords).split(",") if k.strip()
+]
+NEWS_COUNT_PER_KEYWORD = int(os.getenv("NEWS_COUNT_PER_KEYWORD", "5"))
+
+# 뉴스 스케줄: 쉼표로 구분된 시간 (환경변수로 변경 가능)
+_default_news_times = "08:00,18:00"
+NEWS_SCHEDULE_TIMES = [
+    t.strip() for t in os.getenv("NEWS_SCHEDULE_TIMES", _default_news_times).split(",") if t.strip()
+]
 
 # 발송 이력 파일 경로
 SEND_HISTORY_FILE = "send_history.json"
+
+# 뉴스 중복 필터링용 해시 파일
+NEWS_HASH_FILE = "news_sent_hashes.json"
