@@ -17,7 +17,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 CHAT_IDS = {
     "내 개인": os.getenv("PERSONAL_CHAT_ID", "7447207979"),
     "날씨 알림 채널": os.getenv("WEATHER_CHANNEL_ID", "-1003854343800"),
-    "뉴스 채널": os.getenv("NEWS_CHANNEL_ID", ""),
+    "뉴스 채널": os.getenv("NEWS_CHANNEL_ID", "-1003854343800"),
 }
 
 # === 날씨 설정 ===
