@@ -22,3 +22,9 @@ scheduler_error.log
 # IDE
 .vscode/
 .idea/
+
+# Claude Code
+.claude/
+
+# 이전 버전 (현재 미사용)
+naver-news-bot/
