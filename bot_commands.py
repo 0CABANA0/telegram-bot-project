@@ -2,14 +2,13 @@
 bot_commands.py - 텔레그램 봇 커맨드 핸들러
 사용자 명령을 수신하여 날씨 위치 설정 등을 처리합니다.
 
-지원 명령:
-  /위치 <도시>  — 날씨 도시 수동 설정 (예: /위치 부산)
-  /위치자동     — IP 기반 자동 위치 감지
+지원 명령 (띄어쓰기/붙여쓰기 모두 인식):
   /날씨        — 현재 설정으로 즉시 날씨 확인
+  /뉴스        — 즉시 뉴스 브리핑 발송
+  /위치 <도시>  — 날씨 도시 수동 설정 (예: /위치 부산)
+  /위치 자동    — IP 기반 자동 위치 감지
   /설정        — 현재 설정 확인
-
-텔레그램 위치 공유(📎 → 위치):
-  GPS 좌표 기반으로 정확한 위치를 자동 저장합니다.
+  /도움        — 명령어 도움말
 """
 
 import json
@@ -22,6 +21,7 @@ import requests
 
 from config import (
     TELEGRAM_BOT_TOKEN, CHAT_IDS, WEATHER_SCHEDULE_TIME, NEWS_SCHEDULE_TIMES,
+    NEWS_KEYWORDS, NEWS_COUNT_PER_KEYWORD,
     CITY_MAP, CITY_MAP_REV,
 )
 from telegram_sender import send_message
@@ -168,15 +168,20 @@ def handle_message(token: str, message: dict):
 
     print(f"[커맨드] 수신: {text} (chat_id: {chat_id})", flush=True)
 
-    if text.startswith("/위치자동"):
+    # 공백 제거한 정규화 명령 (띄어쓰기/붙여쓰기 모두 인식)
+    cmd = text.replace(" ", "")
+
+    if cmd.startswith("/위치자동"):
         _run_in_thread(_cmd_auto_location, token, chat_id)
-    elif text.startswith("/위치"):
+    elif cmd.startswith("/위치"):
         _run_in_thread(_cmd_set_location, token, chat_id, text)
-    elif text.startswith("/날씨"):
+    elif cmd.startswith("/날씨"):
         _run_in_thread(_cmd_weather_now, token, chat_id)
-    elif text.startswith("/설정"):
+    elif cmd.startswith("/뉴스"):
+        _run_in_thread(_cmd_news_now, token, chat_id)
+    elif cmd.startswith("/설정"):
         _run_in_thread(_cmd_show_settings, token, chat_id)
-    elif text.startswith("/도움") or text.startswith("/help"):
+    elif cmd.startswith("/도움") or cmd.startswith("/help"):
         _run_in_thread(_cmd_help, token, chat_id)
 
 
@@ -246,14 +251,20 @@ def _cmd_auto_location(token: str, chat_id: str):
 
 def _cmd_set_location(token: str, chat_id: str, text: str):
     """수동 위치 설정: /위치 <도시>"""
+    # 공백 유무 모두 지원: "/위치 부산", "/위치부산"
     parts = text.split(maxsplit=1)
+    if len(parts) >= 2:
+        arg = parts[1].strip()
+    else:
+        # "/위치부산" 처럼 붙여쓴 경우 → "/위치" 접두사 제거
+        arg = text.lstrip("/").replace("위치", "", 1).strip()
 
-    # "/위치 자동" → 자동 감지로 전환
-    if len(parts) >= 2 and parts[1].strip() in ("자동", "auto"):
+    # "자동" / "auto" → 자동 감지로 전환
+    if arg in ("자동", "auto"):
         _cmd_auto_location(token, chat_id)
         return
 
-    if len(parts) < 2:
+    if not arg:
         cities = "  ".join(list(CITY_MAP.keys())[:10])
         reply = (
             "📍 <b>위치 설정 방법</b>\n\n"
@@ -261,13 +272,13 @@ def _cmd_set_location(token: str, chat_id: str, text: str):
             "   /위치 부산\n"
             "   /위치 Seoul\n\n"
             "2️⃣ <b>자동 감지</b>\n"
-            "   /위치자동\n\n"
+            "   /위치 자동\n\n"
             f"🏙️ 주요 도시: {cities} ..."
         )
         send_message(token, chat_id, reply)
         return
 
-    city_input = parts[1].strip()
+    city_input = arg
 
     # 한글 도시명 확인
     if city_input in CITY_MAP:
@@ -288,7 +299,7 @@ def _cmd_set_location(token: str, chat_id: str, text: str):
 
 
 def _cmd_weather_now(token: str, chat_id: str):
-    """즉시 날씨 확인: /날씨 (Open-Meteo 우선, wttr.in fallback)"""
+    """즉시 날씨 확인: /날씨"""
     from weather_alert import load_location as wa_load, get_weather_message
 
     city, city_kr = wa_load()
@@ -300,6 +311,27 @@ def _cmd_weather_now(token: str, chat_id: str):
     except Exception as e:
         print(f"[커맨드] /날씨 오류: {e}", flush=True)
         send_message(token, chat_id, f"❌ 날씨 조회 실패: {e}")
+
+
+def _cmd_news_now(token: str, chat_id: str):
+    """즉시 뉴스 발송: /뉴스"""
+    from news_bot import send_news
+
+    print(f"[커맨드] /뉴스 처리 시작", flush=True)
+    send_message(token, chat_id, "📰 뉴스 수집 중... 잠시만 기다려주세요.")
+    try:
+        result = send_news()
+        if result.get("ok") and result.get("total", 0) > 0:
+            print(f"[커맨드] /뉴스 발송: {result['total']}건 완료", flush=True)
+        elif result.get("total", 0) == 0:
+            send_message(token, chat_id, "📭 새로운 뉴스가 없습니다.")
+            print("[커맨드] /뉴스: 새 뉴스 없음", flush=True)
+        else:
+            send_message(token, chat_id, f"❌ 뉴스 발송 실패: {result.get('message', '')}")
+            print(f"[커맨드] /뉴스 실패: {result.get('message', '')}", flush=True)
+    except Exception as e:
+        print(f"[커맨드] /뉴스 오류: {e}", flush=True)
+        send_message(token, chat_id, f"❌ 뉴스 조회 실패: {e}")
 
 
 def _cmd_show_settings(token: str, chat_id: str):
@@ -323,14 +355,26 @@ def _cmd_show_settings(token: str, chat_id: str):
 
 def _cmd_help(token: str, chat_id: str):
     """도움말: /도움"""
+    news_times = ", ".join(NEWS_SCHEDULE_TIMES)
+
+    kw_count = len(NEWS_KEYWORDS)
+    kw_list = ", ".join(NEWS_KEYWORDS)
+
     reply = (
         "🤖 <b>텔레그램 봇 명령어</b>\n\n"
-        "📍 <b>위치 설정</b>\n"
-        "  /위치 서울 — 도시 직접 설정\n"
-        "  /위치자동 — IP 기반 자동 감지\n\n"
         "🌤️ <b>날씨</b>\n"
-        "  /날씨 — 현재 설정 위치의 날씨\n\n"
-        "⚙️ <b>기타</b>\n"
+        f"  /날씨 — 현재 날씨 즉시 확인 (매일 {WEATHER_SCHEDULE_TIME} 자동)\n\n"
+        "📰 <b>뉴스</b>\n"
+        f"  /뉴스 — 뉴스 브리핑 즉시 발송 (매일 {news_times} 자동)\n"
+        f"  • 키워드 {kw_count}개, 키워드당 {NEWS_COUNT_PER_KEYWORD}건\n"
+        f"  • 추적 키워드: {kw_list}\n"
+        "  • 중복 기사 자동 필터링\n\n"
+        "📍 <b>위치 설정</b>\n"
+        "  /위치 서울 — 도시 직접 설정 (한글/영문)\n"
+        "  /위치 자동 — IP 기반 자동 감지\n"
+        "  • 예시: /위치 부산, /위치 대전, /위치 제주\n"
+        f"  • 지원 도시: {', '.join(list(CITY_MAP.keys()))}\n\n"
+        "⚙️ <b>설정</b>\n"
         "  /설정 — 현재 설정 확인\n"
         "  /도움 — 이 도움말"
     )
@@ -356,7 +400,7 @@ def start_command_listener(token: str | None = None):
     def listener():
         print("[커맨드] 텔레그램 명령 수신 대기 중...", flush=True)
         print(
-            "[커맨드] 지원 명령: /위치, /위치자동, /날씨, /설정, /도움",
+            "[커맨드] 지원 명령: /날씨, /뉴스, /위치, /위치 자동, /설정, /도움",
             flush=True,
         )
         offset = 0
