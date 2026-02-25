@@ -5,8 +5,11 @@ weather_scheduler.py - 통합 스케줄러 (날씨 + 뉴스)
 Railway 배포 시 이 파일이 메인 프로세스로 실행됩니다.
 
 스케줄:
-  - 날씨 알림: 매일 WEATHER_SCHEDULE_TIME (기본 08:00)
+  - 날씨 알림: 매일 WEATHER_SCHEDULE_TIME (기본 07:30)
   - 뉴스 브리핑: 매일 NEWS_SCHEDULE_TIMES (기본 08:00, 18:00)
+
+텔레그램 명령 수신:
+  봇이 /위치, /날씨 등의 명령을 실시간으로 수신합니다.
 
 사용법:
     python weather_scheduler.py          # 포그라운드 실행
@@ -26,9 +29,10 @@ import schedule
 # 프로젝트 루트를 path에 추가
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import WEATHER_SCHEDULE_TIME, NEWS_SCHEDULE_TIMES
+from config import TELEGRAM_BOT_TOKEN, WEATHER_SCHEDULE_TIME, NEWS_SCHEDULE_TIMES
 from weather_alert import main as send_weather
 from news_bot import send_news
+from bot_commands import start_command_listener
 
 
 def weather_job():
@@ -87,9 +91,12 @@ def main():
         schedule.every().day.at(news_time).do(news_job)
         print(f"  [스케줄] 뉴스 브리핑: 매일 {news_time}", flush=True)
 
+    # === 텔레그램 커맨드 리스너 시작 (별도 스레드) ===
+    start_command_listener(TELEGRAM_BOT_TOKEN)
+
     tz = os.getenv("TZ", "시스템 기본")
     print(f"\n{'='*50}", flush=True)
-    print(f"  통합 스케줄러 시작 (날씨 + 뉴스)", flush=True)
+    print(f"  통합 스케줄러 시작 (날씨 + 뉴스 + 명령수신)", flush=True)
     print(f"  타임존: {tz}", flush=True)
     print(f"  시작 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
     print(f"{'='*50}", flush=True)

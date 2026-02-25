@@ -7,7 +7,8 @@ from pathlib import Path
 HISTORY_FILE = Path(__file__).parent / "send_history.json"
 
 
-def send_message(token: str, chat_id: str, text: str, parse_mode: str = "HTML") -> dict:
+def send_message(token: str, chat_id: str, text: str, parse_mode: str = "HTML",
+                 reply_to_message_id: int = None) -> dict:
     """
     텔레그램 메시지 발송
     Args:
@@ -15,6 +16,7 @@ def send_message(token: str, chat_id: str, text: str, parse_mode: str = "HTML") 
         chat_id: 대상 Chat ID
         text: 메시지 내용 (HTML 포맷 지원)
         parse_mode: "HTML" 또는 "Markdown"
+        reply_to_message_id: 답장할 메시지 ID (선택)
     Returns:
         dict: API 응답 (ok, result 포함)
     """
@@ -25,6 +27,8 @@ def send_message(token: str, chat_id: str, text: str, parse_mode: str = "HTML") 
         "parse_mode": parse_mode,
         "disable_web_page_preview": False,
     }
+    if reply_to_message_id:
+        payload["reply_to_message_id"] = reply_to_message_id
     try:
         response = requests.post(url, json=payload, timeout=10)
         result = response.json()

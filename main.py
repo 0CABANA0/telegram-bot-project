@@ -6,9 +6,9 @@ tkinter 기반 텔레그램 봇 발송 GUI 애플리케이션입니다.
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 
-from telegram_sender import send_message, _load_history
+from telegram_sender import send_message, get_history
 from news_scraper import scrape_naver_news, format_news_for_telegram
-from config import TELEGRAM_CHAT_ID
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
 class TelegramBotApp:
@@ -68,13 +68,13 @@ class TelegramBotApp:
             return
 
         self._log(f"[발송 중] {text[:50]}...")
-        result = send_message(text)
+        result = send_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, text)
 
         if result.get("ok"):
             self._log("[성공] 메시지 전송 완료")
             self.msg_text.delete("1.0", "end")
         else:
-            self._log(f"[실패] {result.get('error', '알 수 없는 오류')}")
+            self._log(f"[실패] {result.get('description', '알 수 없는 오류')}")
 
     def _scrape_and_send(self):
         """뉴스를 스크래핑하여 텔레그램으로 전송합니다."""
@@ -92,13 +92,13 @@ class TelegramBotApp:
 
         self._log(f"[완료] {len(news_list)}건의 뉴스 수집")
 
-        formatted = format_news_for_telegram(news_list)
-        result = send_message(formatted)
+        formatted = format_news_for_telegram({keyword: news_list})
+        result = send_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, formatted)
 
         if result.get("ok"):
             self._log("[성공] 뉴스 전송 완료")
         else:
-            self._log(f"[실패] {result.get('error', '알 수 없는 오류')}")
+            self._log(f"[실패] {result.get('description', '알 수 없는 오류')}")
 
 
 def main():

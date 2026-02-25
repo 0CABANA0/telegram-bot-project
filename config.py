@@ -1,5 +1,5 @@
 """
-config.py - 설정 (토큰, Chat ID)
+config.py - 중앙 설정
 환경변수에서 Telegram Bot 설정값을 로드합니다.
 """
 
@@ -25,7 +25,7 @@ WEATHER_CITY = os.getenv("WEATHER_CITY", "Seoul")
 WEATHER_CITY_KR = os.getenv("WEATHER_CITY_KR", "서울")
 
 # === 스케줄 설정 ===
-WEATHER_SCHEDULE_TIME = os.getenv("WEATHER_SCHEDULE_TIME", "08:00")
+WEATHER_SCHEDULE_TIME = os.getenv("WEATHER_SCHEDULE_TIME", "07:30")
 
 # === 네이버 뉴스 설정 ===
 # 핵심 키워드 17개 (쉼표 구분, 환경변수로 변경 가능)
@@ -48,8 +48,15 @@ NEWS_SCHEDULE_TIMES = [
     t.strip() for t in os.getenv("NEWS_SCHEDULE_TIMES", _default_news_times).split(",") if t.strip()
 ]
 
-# 발송 이력 파일 경로
-SEND_HISTORY_FILE = "send_history.json"
-
 # 뉴스 중복 필터링용 해시 파일
 NEWS_HASH_FILE = "news_sent_hashes.json"
+
+# === 한국 주요 도시 매핑 ===
+CITY_MAP = {
+    "서울": "Seoul", "부산": "Busan", "대구": "Daegu", "인천": "Incheon",
+    "광주": "Gwangju", "대전": "Daejeon", "울산": "Ulsan", "세종": "Sejong",
+    "수원": "Suwon", "성남": "Seongnam", "고양": "Goyang", "용인": "Yongin",
+    "창원": "Changwon", "청주": "Cheongju", "전주": "Jeonju", "천안": "Cheonan",
+    "제주": "Jeju", "김해": "Gimhae", "포항": "Pohang", "평택": "Pyeongtaek",
+}
+CITY_MAP_REV = {v.lower(): k for k, v in CITY_MAP.items()}

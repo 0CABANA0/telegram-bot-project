@@ -86,6 +86,7 @@ def scrape_naver_news(keyword: str, count: int = 5) -> list[dict]:
 
     # 최대 2회 재시도 (403 차단 대응)
     soup = None
+    resp = None
     for attempt in range(3):
         try:
             resp = requests.get(url, params=params, headers=HEADERS, timeout=15)
@@ -344,11 +345,11 @@ def format_news_for_telegram(all_news: dict[str, list[dict]]) -> str:
 
     for keyword, articles in all_news.items():
         if not articles:
-            lines.append(f"🔹 <b>#{keyword}</b> — 새로운 뉴스 없음")
+            lines.append(f"🔹 <b>{keyword}</b> — 새로운 뉴스 없음")
             lines.append("")
             continue
 
-        lines.append(f"🔹 <b>#{keyword}</b>")
+        lines.append(f"🔹 <b>{keyword}</b>")
 
         for i, art in enumerate(articles, 1):
             press_str = f" [{art['press']}]" if art.get("press") else ""

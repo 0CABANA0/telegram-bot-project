@@ -34,7 +34,6 @@ def _split_message(text: str, max_len: int = MAX_MSG_LEN) -> list[str]:
     current = ""
 
     for line in text.split("\n"):
-        # 현재 청크에 이 줄을 추가해도 한도 내인지 확인
         candidate = current + "\n" + line if current else line
         if len(candidate) <= max_len:
             current = candidate
