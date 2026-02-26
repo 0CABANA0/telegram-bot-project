@@ -12,6 +12,7 @@ send_history.json
 news_sent_hashes.json
 news_article_cache.json
 weather_location.json
+scheduler_state.json
 scheduler.log
 scheduler_error.log
 

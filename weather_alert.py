@@ -270,12 +270,15 @@ def get_weather_message(city: str, city_kr: str) -> str:
     # 1차: Open-Meteo (빠름, ~1초)
     try:
         data = get_weather_openmeteo(city)
-        return format_weather_openmeteo(data, city_kr)
+        msg = format_weather_openmeteo(data, city_kr)
+        print("[날씨] Open-Meteo 성공", flush=True)
+        return msg
     except Exception as e:
-        print(f"[날씨] Open-Meteo 실패, wttr.in 시도: {e}", flush=True)
+        print(f"[날씨] Open-Meteo 실패 ({type(e).__name__}: {e}), wttr.in 시도...", flush=True)
 
     # 2차: wttr.in (느림, fallback)
     data = get_weather_wttr(city)
+    print("[날씨] wttr.in 성공 (fallback)", flush=True)
     return format_weather_wttr(data, city_kr)
 
 
