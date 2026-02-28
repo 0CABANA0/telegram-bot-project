@@ -244,14 +244,14 @@ def main():
 
     # === 스케줄 등록 ===
 
-    # 날씨 스케줄 (KST 명시)
+    # 날씨 스케줄 (KST 명시 — schedule 라이브러리는 문자열/pytz만 허용)
     weather_time = WEATHER_SCHEDULE_TIME
-    schedule.every().day.at(weather_time, tz=KST).do(weather_job)
+    schedule.every().day.at(weather_time, tz="Asia/Seoul").do(weather_job)
     print(f"  [스케줄] 날씨 알림: 매일 {weather_time} KST", flush=True)
 
     # 뉴스 스케줄 (여러 시간 지원, KST 명시)
     for news_time in NEWS_SCHEDULE_TIMES:
-        schedule.every().day.at(news_time, tz=KST).do(news_job)
+        schedule.every().day.at(news_time, tz="Asia/Seoul").do(news_job)
         print(f"  [스케줄] 뉴스 브리핑: 매일 {news_time} KST", flush=True)
 
     # === 텔레그램 커맨드 리스너 시작 (별도 스레드) ===
