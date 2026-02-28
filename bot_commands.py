@@ -128,8 +128,27 @@ def _reverse_geocode(lat: float, lon: float) -> dict | None:
 # 텔레그램 업데이트 수신
 # ──────────────────────────────────────────────
 
-def _get_updates(token: str, offset: int = 0, timeout: int = 30) -> list:
-    """텔레그램 업데이트(메시지+채널포스트)를 가져옵니다. (Long Polling)"""
+def _clear_webhook(token: str):
+    """기존 웹훅/폴링 세션을 정리하여 getUpdates 충돌을 방지합니다."""
+    url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+    try:
+        resp = requests.post(url, json={"drop_pending_updates": False}, timeout=10)
+        data = resp.json()
+        if data.get("ok"):
+            print("[커맨드] 웹훅/이전 폴링 세션 정리 완료", flush=True)
+        else:
+            print(f"[커맨드] 웹훅 정리 실패: {data.get('description', '')}", flush=True)
+    except Exception as e:
+        print(f"[커맨드] 웹훅 정리 예외: {e}", flush=True)
+
+
+def _get_updates(token: str, offset: int = 0, timeout: int = 30) -> list | None:
+    """텔레그램 업데이트(메시지+채널포스트)를 가져옵니다. (Long Polling)
+
+    Returns:
+        list: 업데이트 목록
+        None: 409 Conflict 발생 시 (재초기화 필요 신호)
+    """
     url = f"https://api.telegram.org/bot{token}/getUpdates"
     params = {
         "offset": offset,
@@ -141,8 +160,13 @@ def _get_updates(token: str, offset: int = 0, timeout: int = 30) -> list:
         data = resp.json()
         if data.get("ok"):
             return data.get("result", [])
-        else:
-            print(f"[커맨드] getUpdates 오류: {data.get('description', '')}", flush=True)
+
+        # 409 Conflict: 다른 인스턴스가 동시에 getUpdates 호출 중
+        if resp.status_code == 409:
+            print("[커맨드] 409 Conflict 감지 — 다른 인스턴스와 충돌", flush=True)
+            return None
+
+        print(f"[커맨드] getUpdates 오류: {data.get('description', '')}", flush=True)
     except Exception as e:
         print(f"[커맨드] getUpdates 예외: {e}", flush=True)
     return []
@@ -389,6 +413,8 @@ def start_command_listener(token: str | None = None):
     """
     별도 스레드에서 텔레그램 명령 수신을 시작합니다.
     Long Polling으로 메시지를 실시간 수신합니다.
+    시작 시 deleteWebhook으로 이전 세션을 정리하고,
+    409 Conflict 발생 시 자동 재초기화합니다.
     """
     if token is None:
         token = TELEGRAM_BOT_TOKEN
@@ -398,16 +424,32 @@ def start_command_listener(token: str | None = None):
         return None
 
     def listener():
+        # 시작 시 이전 폴링 세션 정리 (충돌 방지)
+        _clear_webhook(token)
+
         print("[커맨드] 텔레그램 명령 수신 대기 중...", flush=True)
         print(
             "[커맨드] 지원 명령: /날씨, /뉴스, /위치, /위치 자동, /설정, /도움",
             flush=True,
         )
         offset = 0
+        conflict_count = 0
 
         while True:
             try:
                 updates = _get_updates(token, offset=offset, timeout=30)
+
+                # 409 Conflict → 백오프 후 재초기화
+                if updates is None:
+                    conflict_count += 1
+                    backoff = min(conflict_count * 5, 30)
+                    print(f"[커맨드] 충돌 복구 대기 {backoff}초 (#{conflict_count})", flush=True)
+                    time.sleep(backoff)
+                    _clear_webhook(token)
+                    continue
+
+                conflict_count = 0  # 정상 응답 시 카운터 초기화
+
                 for update in updates:
                     offset = update["update_id"] + 1
 

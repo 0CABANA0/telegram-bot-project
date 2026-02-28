@@ -30,8 +30,12 @@ import signal
 import threading
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import schedule
+
+# 한국 표준시 (KST, UTC+9)
+KST = ZoneInfo("Asia/Seoul")
 
 # 프로젝트 루트를 path에 추가
 sys.path.insert(0, str(Path(__file__).parent))
@@ -68,19 +72,24 @@ def _save_state(state: dict):
     )
 
 
+def _now() -> datetime:
+    """한국 시간(KST) 기준 현재 시각을 반환합니다."""
+    return datetime.now(KST)
+
+
 def _mark_done(job_key: str):
     """작업 완료를 기록 (날짜+시간 키)"""
     state = _load_state()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _now().strftime("%Y-%m-%d")
     state[job_key] = today
-    state["_last_heartbeat"] = datetime.now().isoformat()
+    state["_last_heartbeat"] = _now().isoformat()
     _save_state(state)
 
 
 def _was_done_today(job_key: str) -> bool:
     """오늘 이미 완료된 작업인지 확인"""
     state = _load_state()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _now().strftime("%Y-%m-%d")
     return state.get(job_key) == today
 
 
@@ -96,9 +105,9 @@ def weather_job():
         print(f"[스케줄] 날씨 알림: 오늘 이미 발송됨, 건너뜀", flush=True)
         return
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = _now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"\n{'='*50}", flush=True)
-    print(f"[{now}] 날씨 알림 작업 시작", flush=True)
+    print(f"[{now_str}] 날씨 알림 작업 시작", flush=True)
     print(f"{'='*50}", flush=True)
 
     # 첫 시도
@@ -133,11 +142,15 @@ def weather_job():
     threading.Thread(target=_retry, daemon=True, name="WeatherRetry").start()
 
 
-def news_job():
-    """스케줄 작업: 뉴스 브리핑 발송 (실패 시 자동 재시도)"""
-    now = datetime.now()
+def news_job(period_override: str | None = None):
+    """스케줄 작업: 뉴스 브리핑 발송 (실패 시 자동 재시도)
+
+    Args:
+        period_override: "am" 또는 "pm" (None이면 현재 시각으로 자동 결정)
+    """
+    now = _now()
     # 뉴스는 오전/오후 구분 (같은 날 여러 번 발송하므로 시간대별 키)
-    period = "am" if now.hour < 12 else "pm"
+    period = period_override if period_override else ("am" if now.hour < 12 else "pm")
     job_key = f"news_{period}"
 
     if _was_done_today(job_key):
@@ -149,8 +162,10 @@ def news_job():
     print(f"[{now_str}] 뉴스 브리핑 작업 시작 ({period})", flush=True)
     print(f"{'='*50}", flush=True)
 
+    time_label = "오전" if period == "am" else "오후"
+
     try:
-        result = send_news()
+        result = send_news(time_label=time_label)
         if result and result.get("ok"):
             _mark_done(job_key)
             return
@@ -172,7 +187,7 @@ def news_job():
             if _was_done_today(job_key):
                 return
             try:
-                result = send_news()
+                result = send_news(time_label=time_label)
                 if result and (result.get("ok") or result.get("total", -1) == 0):
                     _mark_done(job_key)
                     print(f"[뉴스] 재시도 {i} 성공!", flush=True)
@@ -186,7 +201,7 @@ def news_job():
 
 def graceful_shutdown(signum, frame):
     """종료 시그널 처리 (Railway 재시작/종료 대응)"""
-    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] 스케줄러 종료 중...", flush=True)
+    print(f"\n[{_now().strftime('%H:%M:%S')}] 스케줄러 종료 중...", flush=True)
     sys.exit(0)
 
 
@@ -195,7 +210,7 @@ def _recover_missed_jobs():
     시작 시 놓친 스케줄 보충.
     현재 시각이 예정 시간을 지났는데 오늘 미발송이면 즉시 실행.
     """
-    now = datetime.now()
+    now = _now()
     current_time = now.strftime("%H:%M")
 
     # 날씨: 예정 시간이 지났고 오늘 미발송이면
@@ -210,7 +225,7 @@ def _recover_missed_jobs():
             period = "am" if hour < 12 else "pm"
             if not _was_done_today(f"news_{period}"):
                 print(f"[보충] 뉴스 브리핑({period}) 미발송 감지 (예정 {news_time}), 즉시 발송", flush=True)
-                news_job()
+                news_job(period_override=period)
 
 
 def main():
@@ -229,24 +244,23 @@ def main():
 
     # === 스케줄 등록 ===
 
-    # 날씨 스케줄
+    # 날씨 스케줄 (KST 명시)
     weather_time = WEATHER_SCHEDULE_TIME
-    schedule.every().day.at(weather_time).do(weather_job)
-    print(f"  [스케줄] 날씨 알림: 매일 {weather_time}", flush=True)
+    schedule.every().day.at(weather_time, tz=KST).do(weather_job)
+    print(f"  [스케줄] 날씨 알림: 매일 {weather_time} KST", flush=True)
 
-    # 뉴스 스케줄 (여러 시간 지원)
+    # 뉴스 스케줄 (여러 시간 지원, KST 명시)
     for news_time in NEWS_SCHEDULE_TIMES:
-        schedule.every().day.at(news_time).do(news_job)
-        print(f"  [스케줄] 뉴스 브리핑: 매일 {news_time}", flush=True)
+        schedule.every().day.at(news_time, tz=KST).do(news_job)
+        print(f"  [스케줄] 뉴스 브리핑: 매일 {news_time} KST", flush=True)
 
     # === 텔레그램 커맨드 리스너 시작 (별도 스레드) ===
     start_command_listener(TELEGRAM_BOT_TOKEN)
 
-    tz = os.getenv("TZ", "시스템 기본")
     print(f"\n{'='*50}", flush=True)
     print(f"  통합 스케줄러 시작 (날씨 + 뉴스 + 명령수신)", flush=True)
-    print(f"  타임존: {tz}", flush=True)
-    print(f"  시작 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+    print(f"  타임존: Asia/Seoul (KST, UTC+9)", flush=True)
+    print(f"  시작 시각: {_now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
     print(f"{'='*50}", flush=True)
 
     # --now: 즉시 1회 실행 (중복 방지 포함)
@@ -274,12 +288,12 @@ def main():
         # 하트비트 로그 (1시간마다)
         if time.time() - last_heartbeat >= heartbeat_interval:
             state = _load_state()
-            state["_last_heartbeat"] = datetime.now().isoformat()
+            state["_last_heartbeat"] = _now().isoformat()
             _save_state(state)
-            print(f"[하트비트] {datetime.now().strftime('%H:%M')} 스케줄러 정상 동작 중", flush=True)
+            print(f"[하트비트] {_now().strftime('%H:%M')} 스케줄러 정상 동작 중", flush=True)
             last_heartbeat = time.time()
 
-        time.sleep(30)  # 30초 간격으로 체크
+        time.sleep(5)  # 5초 간격으로 체크 (정확한 스케줄 실행)
 
 
 if __name__ == "__main__":
